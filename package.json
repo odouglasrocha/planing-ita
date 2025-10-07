@@ -14,7 +14,7 @@
     "server:prod": "NODE_ENV=production node server.js",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "start": "npm run server:prod",
-    "deploy": "npm run build:prod && npm run start"
+    "deploy": "git pull && npm install && npm run build && pm2 restart all"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
