@@ -1,26 +1,31 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 export interface LossType {
-  id: string;
+  _id: string;
   name: string;
-  unit: string;
-  color: string;
-  icon: string;
   description?: string;
+  category?: string;
+  icon?: string;
+  color?: string;
+  unit?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface MaterialLoss {
-  id: string;
+  _id: string;
   machine_id: string | null;
   loss_type_id: string;
   order_id: string | null;
   operator_id: string | null;
-  amount: number;
-  reason: string;
+  quantity: number;
+  unit: string;
+  description?: string;
   recorded_at: string;
   created_at: string;
+  updated_at: string;
+  loss_type?: LossType;
 }
 
 export function useMaterialLosses() {
@@ -31,13 +36,28 @@ export function useMaterialLosses() {
 
   const fetchLossTypes = async () => {
     try {
-      const { data, error } = await supabase
-        .from('loss_types')
-        .select('*')
-        .order('name');
+      const token = localStorage.getItem('mongo_auth_token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
 
-      if (error) throw error;
-      setLossTypes(data || []);
+      const response = await fetch('/api/loss-types', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setLossTypes(result.data || []);
+      } else {
+        throw new Error(result.error || 'Failed to fetch loss types');
+      }
     } catch (error) {
       console.error('Error fetching loss types:', error);
       toast({
@@ -50,13 +70,28 @@ export function useMaterialLosses() {
 
   const fetchLosses = async () => {
     try {
-      const { data, error } = await supabase
-        .from('material_losses')
-        .select('*')
-        .order('recorded_at', { ascending: false });
+      const token = localStorage.getItem('mongo_auth_token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
 
-      if (error) throw error;
-      setLosses(data || []);
+      const response = await fetch('/api/material-losses', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setLosses(result.data || []);
+      } else {
+        throw new Error(result.error || 'Failed to fetch losses');
+      }
     } catch (error) {
       console.error('Error fetching losses:', error);
       toast({
@@ -74,35 +109,52 @@ export function useMaterialLosses() {
     loss_type_id: string;
     order_id?: string | null;
     operator_id?: string | null;
-    amount: number;
-    reason: string;
+    quantity: number;
+    unit: string;
+    description?: string;
   }) => {
     try {
-      const { data, error } = await supabase
-        .from('material_losses')
-        .insert([{
+      const token = localStorage.getItem('mongo_auth_token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch('/api/material-losses', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
           machine_id: lossData.machine_id,
           loss_type_id: lossData.loss_type_id,
           order_id: lossData.order_id || null,
           operator_id: lossData.operator_id || null,
-          amount: lossData.amount,
-          reason: lossData.reason,
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setLosses(prev => [data, ...prev]);
-      
-      const lossType = lossTypes.find(type => type.id === lossData.loss_type_id);
-      toast({
-        title: "Perda registrada!",
-        description: `${lossData.amount}${lossType?.unit || 'kg'} de perda tipo ${lossType?.name || 'desconhecido'} foi registrada.`,
-        variant: "default",
+          quantity: lossData.quantity,
+          unit: lossData.unit,
+          description: lossData.description || null,
+        }),
       });
 
-      return data;
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setLosses(prev => [result.data, ...prev]);
+        
+        const lossType = lossTypes.find(type => type._id === lossData.loss_type_id);
+        toast({
+          title: "Perda registrada!",
+          description: `${lossData.quantity}${lossData.unit} de perda tipo ${lossType?.name || 'desconhecido'} foi registrada.`,
+          variant: "default",
+        });
+
+        return result.data;
+      } else {
+        throw new Error(result.error || 'Failed to create loss');
+      }
     } catch (error) {
       console.error('Error creating loss:', error);
       toast({
@@ -115,13 +167,13 @@ export function useMaterialLosses() {
   };
 
   const getTotalLosses = () => {
-    return losses.reduce((sum, loss) => sum + loss.amount, 0);
+    return losses.reduce((sum, loss) => sum + loss.quantity, 0);
   };
 
   const getLossTypeTotal = (typeId: string) => {
     return losses
       .filter(loss => loss.loss_type_id === typeId)
-      .reduce((sum, loss) => sum + loss.amount, 0);
+      .reduce((sum, loss) => sum + loss.quantity, 0);
   };
 
   useEffect(() => {

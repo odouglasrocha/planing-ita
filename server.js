@@ -73,7 +73,7 @@ const authLimiter = rateLimit({
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs for general endpoints
+  max: 500, // Increased from 100 to 500 requests per windowMs for general endpoints
   message: {
     success: false,
     error: 'Too many requests, please try again later'
@@ -1850,6 +1850,663 @@ app.delete('/api/production-records', verifyToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to clear production records'
+    });
+  }
+});
+
+// ===== MATERIAL LOSSES ENDPOINTS =====
+
+// Validation for loss types
+const validateLossType = [
+  body('name')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Loss type name must be between 2 and 100 characters'),
+  body('description')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Description must not exceed 500 characters'),
+  body('category')
+    .optional()
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage('Category must not exceed 50 characters'),
+];
+
+// Validation for material losses
+const validateMaterialLoss = [
+  body('loss_type_id')
+    .trim()
+    .notEmpty()
+    .withMessage('Loss type ID is required'),
+  body('quantity')
+    .isFloat({ min: 0 })
+    .withMessage('Quantity must be a non-negative number'),
+  body('unit')
+    .trim()
+    .isLength({ min: 1, max: 10 })
+    .withMessage('Unit must be between 1 and 10 characters'),
+  body('description')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Description must not exceed 500 characters'),
+  body('machine_id')
+    .optional()
+    .trim(),
+  body('operator_id')
+    .optional()
+    .trim(),
+  body('order_id')
+    .optional()
+    .trim(),
+  body('recorded_at')
+    .optional()
+    .isISO8601()
+    .withMessage('Recorded at must be a valid ISO 8601 date'),
+];
+
+// Loss Types Endpoints
+// GET /api/loss-types - Get all loss types
+app.get('/api/loss-types', verifyToken, async (req, res) => {
+  try {
+    const lossTypes = await db.collection('loss_types').find({}).toArray();
+    res.json({
+      success: true,
+      data: lossTypes
+    });
+  } catch (error) {
+    console.error('Error fetching loss types:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch loss types'
+    });
+  }
+});
+
+// GET /api/loss-types/:id - Get specific loss type
+app.get('/api/loss-types/:id', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid loss type ID format'
+      });
+    }
+
+    const lossType = await db.collection('loss_types').findOne({ _id: new ObjectId(id) });
+    
+    if (!lossType) {
+      return res.status(404).json({
+        success: false,
+        error: 'Loss type not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: lossType
+    });
+  } catch (error) {
+    console.error('Error fetching loss type:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch loss type'
+    });
+  }
+});
+
+// POST /api/loss-types - Create new loss type
+app.post('/api/loss-types', verifyToken, validateLossType, handleValidationErrors, async (req, res) => {
+  try {
+    const { name, description, category } = req.body;
+
+    // Check if loss type with same name already exists
+    const existingLossType = await db.collection('loss_types').findOne({ name });
+    if (existingLossType) {
+      return res.status(409).json({
+        success: false,
+        error: 'Loss type with this name already exists'
+      });
+    }
+
+    const newLossType = {
+      name,
+      description: description || null,
+      category: category || null,
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+
+    const result = await db.collection('loss_types').insertOne(newLossType);
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        _id: result.insertedId,
+        ...newLossType
+      }
+    });
+  } catch (error) {
+    console.error('Error creating loss type:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create loss type'
+    });
+  }
+});
+
+// PUT /api/loss-types/:id - Update loss type
+app.put('/api/loss-types/:id', verifyToken, validateLossType, handleValidationErrors, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, category } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid loss type ID format'
+      });
+    }
+
+    // Check if loss type exists
+    const existingLossType = await db.collection('loss_types').findOne({ _id: new ObjectId(id) });
+    if (!existingLossType) {
+      return res.status(404).json({
+        success: false,
+        error: 'Loss type not found'
+      });
+    }
+
+    // Check if another loss type with same name exists (excluding current one)
+    const duplicateLossType = await db.collection('loss_types').findOne({ 
+      name, 
+      _id: { $ne: new ObjectId(id) } 
+    });
+    if (duplicateLossType) {
+      return res.status(409).json({
+        success: false,
+        error: 'Loss type with this name already exists'
+      });
+    }
+
+    const updateData = {
+      name,
+      description: description || null,
+      category: category || null,
+      updated_at: new Date()
+    };
+
+    const result = await db.collection('loss_types').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Loss type not found'
+      });
+    }
+
+    const updatedLossType = await db.collection('loss_types').findOne({ _id: new ObjectId(id) });
+    
+    res.json({
+      success: true,
+      data: updatedLossType
+    });
+  } catch (error) {
+    console.error('Error updating loss type:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update loss type'
+    });
+  }
+});
+
+// DELETE /api/loss-types/:id - Delete loss type
+app.delete('/api/loss-types/:id', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid loss type ID format'
+      });
+    }
+
+    // Check if loss type exists
+    const existingLossType = await db.collection('loss_types').findOne({ _id: new ObjectId(id) });
+    if (!existingLossType) {
+      return res.status(404).json({
+        success: false,
+        error: 'Loss type not found'
+      });
+    }
+
+    // Check if there are material losses using this loss type
+    const relatedLosses = await db.collection('material_losses').findOne({ loss_type_id: id });
+    if (relatedLosses) {
+      return res.status(409).json({
+        success: false,
+        error: 'Cannot delete loss type that has associated material losses'
+      });
+    }
+
+    const result = await db.collection('loss_types').deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Loss type not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Loss type deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting loss type:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete loss type'
+    });
+  }
+});
+
+// Material Losses Endpoints
+// GET /api/material-losses - Get all material losses with pagination and filters
+app.get('/api/material-losses', verifyToken, async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 50, 
+      loss_type_id, 
+      machine_id, 
+      operator_id, 
+      order_id,
+      start_date,
+      end_date 
+    } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const query = {};
+
+    // Add filters
+    if (loss_type_id) query.loss_type_id = loss_type_id;
+    if (machine_id) query.machine_id = machine_id;
+    if (operator_id) query.operator_id = operator_id;
+    if (order_id) query.order_id = order_id;
+
+    // Date range filter
+    if (start_date || end_date) {
+      query.recorded_at = {};
+      if (start_date) query.recorded_at.$gte = new Date(start_date);
+      if (end_date) query.recorded_at.$lte = new Date(end_date);
+    }
+
+    const [materialLosses, total] = await Promise.all([
+      db.collection('material_losses')
+        .aggregate([
+          { $match: query },
+          {
+            $lookup: {
+              from: 'loss_types',
+              localField: 'loss_type_id',
+              foreignField: '_id',
+              as: 'loss_type',
+              pipeline: [{ $project: { name: 1, category: 1 } }]
+            }
+          },
+          { $unwind: { path: '$loss_type', preserveNullAndEmptyArrays: true } },
+          { $sort: { recorded_at: -1 } },
+          { $skip: skip },
+          { $limit: parseInt(limit) }
+        ])
+        .toArray(),
+      db.collection('material_losses').countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      data: materialLosses,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching material losses:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch material losses'
+    });
+  }
+});
+
+// GET /api/material-losses/:id - Get specific material loss
+app.get('/api/material-losses/:id', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid material loss ID format'
+      });
+    }
+
+    const materialLoss = await db.collection('material_losses')
+      .aggregate([
+        { $match: { _id: new ObjectId(id) } },
+        {
+          $lookup: {
+            from: 'loss_types',
+            localField: 'loss_type_id',
+            foreignField: '_id',
+            as: 'loss_type'
+          }
+        },
+        { $unwind: { path: '$loss_type', preserveNullAndEmptyArrays: true } }
+      ])
+      .toArray();
+    
+    if (!materialLoss || materialLoss.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Material loss not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: materialLoss[0]
+    });
+  } catch (error) {
+    console.error('Error fetching material loss:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch material loss'
+    });
+  }
+});
+
+// POST /api/material-losses - Create new material loss
+app.post('/api/material-losses', verifyToken, validateMaterialLoss, handleValidationErrors, async (req, res) => {
+  try {
+    const { 
+      loss_type_id, 
+      quantity, 
+      unit, 
+      description, 
+      machine_id, 
+      operator_id, 
+      order_id,
+      recorded_at 
+    } = req.body;
+
+    // Verify loss type exists
+    if (ObjectId.isValid(loss_type_id)) {
+      const lossType = await db.collection('loss_types').findOne({ _id: new ObjectId(loss_type_id) });
+      if (!lossType) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid loss type ID'
+        });
+      }
+    }
+
+    const newMaterialLoss = {
+      loss_type_id: ObjectId.isValid(loss_type_id) ? new ObjectId(loss_type_id) : loss_type_id,
+      quantity: parseFloat(quantity),
+      unit,
+      description: description || null,
+      machine_id: machine_id || null,
+      operator_id: operator_id || null,
+      order_id: order_id || null,
+      recorded_at: recorded_at ? new Date(recorded_at) : new Date(),
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+
+    const result = await db.collection('material_losses').insertOne(newMaterialLoss);
+    
+    // Fetch the created loss with loss type info
+    const createdLoss = await db.collection('material_losses')
+      .aggregate([
+        { $match: { _id: result.insertedId } },
+        {
+          $lookup: {
+            from: 'loss_types',
+            localField: 'loss_type_id',
+            foreignField: '_id',
+            as: 'loss_type'
+          }
+        },
+        { $unwind: { path: '$loss_type', preserveNullAndEmptyArrays: true } }
+      ])
+      .toArray();
+    
+    res.status(201).json({
+      success: true,
+      data: createdLoss[0]
+    });
+  } catch (error) {
+    console.error('Error creating material loss:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create material loss'
+    });
+  }
+});
+
+// PUT /api/material-losses/:id - Update material loss
+app.put('/api/material-losses/:id', verifyToken, validateMaterialLoss, handleValidationErrors, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      loss_type_id, 
+      quantity, 
+      unit, 
+      description, 
+      machine_id, 
+      operator_id, 
+      order_id,
+      recorded_at 
+    } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid material loss ID format'
+      });
+    }
+
+    // Check if material loss exists
+    const existingLoss = await db.collection('material_losses').findOne({ _id: new ObjectId(id) });
+    if (!existingLoss) {
+      return res.status(404).json({
+        success: false,
+        error: 'Material loss not found'
+      });
+    }
+
+    // Verify loss type exists
+    if (ObjectId.isValid(loss_type_id)) {
+      const lossType = await db.collection('loss_types').findOne({ _id: new ObjectId(loss_type_id) });
+      if (!lossType) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid loss type ID'
+        });
+      }
+    }
+
+    const updateData = {
+      loss_type_id: ObjectId.isValid(loss_type_id) ? new ObjectId(loss_type_id) : loss_type_id,
+      quantity: parseFloat(quantity),
+      unit,
+      description: description || null,
+      machine_id: machine_id || null,
+      operator_id: operator_id || null,
+      order_id: order_id || null,
+      recorded_at: recorded_at ? new Date(recorded_at) : existingLoss.recorded_at,
+      updated_at: new Date()
+    };
+
+    const result = await db.collection('material_losses').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Material loss not found'
+      });
+    }
+
+    // Fetch the updated loss with loss type info
+    const updatedLoss = await db.collection('material_losses')
+      .aggregate([
+        { $match: { _id: new ObjectId(id) } },
+        {
+          $lookup: {
+            from: 'loss_types',
+            localField: 'loss_type_id',
+            foreignField: '_id',
+            as: 'loss_type'
+          }
+        },
+        { $unwind: { path: '$loss_type', preserveNullAndEmptyArrays: true } }
+      ])
+      .toArray();
+    
+    res.json({
+      success: true,
+      data: updatedLoss[0]
+    });
+  } catch (error) {
+    console.error('Error updating material loss:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update material loss'
+    });
+  }
+});
+
+// DELETE /api/material-losses/:id - Delete material loss
+app.delete('/api/material-losses/:id', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid material loss ID format'
+      });
+    }
+
+    const result = await db.collection('material_losses').deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Material loss not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Material loss deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting material loss:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete material loss'
+    });
+  }
+});
+
+// GET /api/material-losses/stats - Get material losses statistics
+app.get('/api/material-losses/stats', verifyToken, async (req, res) => {
+  try {
+    const { start_date, end_date, loss_type_id, machine_id } = req.query;
+    
+    const matchQuery = {};
+    
+    // Date range filter
+    if (start_date || end_date) {
+      matchQuery.recorded_at = {};
+      if (start_date) matchQuery.recorded_at.$gte = new Date(start_date);
+      if (end_date) matchQuery.recorded_at.$lte = new Date(end_date);
+    }
+    
+    if (loss_type_id) matchQuery.loss_type_id = ObjectId.isValid(loss_type_id) ? new ObjectId(loss_type_id) : loss_type_id;
+    if (machine_id) matchQuery.machine_id = machine_id;
+
+    const stats = await db.collection('material_losses').aggregate([
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: null,
+          totalQuantity: { $sum: '$quantity' },
+          totalRecords: { $sum: 1 },
+          avgQuantity: { $avg: '$quantity' },
+          maxQuantity: { $max: '$quantity' },
+          minQuantity: { $min: '$quantity' }
+        }
+      }
+    ]).toArray();
+
+    const byLossType = await db.collection('material_losses').aggregate([
+      { $match: matchQuery },
+      {
+        $lookup: {
+          from: 'loss_types',
+          localField: 'loss_type_id',
+          foreignField: '_id',
+          as: 'loss_type'
+        }
+      },
+      { $unwind: { path: '$loss_type', preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: '$loss_type_id',
+          loss_type_name: { $first: '$loss_type.name' },
+          totalQuantity: { $sum: '$quantity' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { totalQuantity: -1 } }
+    ]).toArray();
+
+    res.json({
+      success: true,
+      data: {
+        overall: stats[0] || {
+          totalQuantity: 0,
+          totalRecords: 0,
+          avgQuantity: 0,
+          maxQuantity: 0,
+          minQuantity: 0
+        },
+        byLossType
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching material losses stats:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch material losses statistics'
     });
   }
 });

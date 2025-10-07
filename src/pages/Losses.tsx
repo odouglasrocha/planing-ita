@@ -44,8 +44,9 @@ export default function Losses() {
       await createLoss({
         machine_id: formData.machine_id,
         loss_type_id: formData.loss_type_id,
-        amount: parseFloat(formData.amount),
-        reason: formData.reason,
+        quantity: parseFloat(formData.amount),
+        unit: "kg",
+        description: formData.reason,
         order_id: formData.order_id || null,
       });
 
@@ -98,14 +99,14 @@ export default function Losses() {
         {/* Loss Type Overview */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {lossTypes.map((type) => (
-            <Card key={type.id} className="text-center">
+            <Card key={type._id} className="text-center">
               <CardContent className="p-4">
-                <div className={`w-12 h-12 ${type.color} rounded-full flex items-center justify-center text-white text-xl mx-auto mb-2`}>
-                  {type.icon}
+                <div className={`w-12 h-12 ${type.color || 'bg-red-500'} rounded-full flex items-center justify-center text-white text-xl mx-auto mb-2`}>
+                  <span className="text-2xl">{type.icon}</span>
                 </div>
                 <h3 className="font-medium text-sm">{type.name}</h3>
                 <p className="text-2xl font-bold text-foreground">
-                  {getLossTypeTotal(type.id).toFixed(1)}
+                  {getLossTypeTotal(type._id).toFixed(1)}
                 </p>
                 <p className="text-xs text-muted-foreground">kg hoje</p>
               </CardContent>
@@ -149,10 +150,10 @@ export default function Losses() {
                       </SelectTrigger>
                       <SelectContent>
                         {lossTypes.map((type) => (
-                          <SelectItem key={type.id} value={type.id}>
+                          <SelectItem key={type._id} value={type._id}>
                             <div className="flex items-center gap-2">
-                              <span>{type.icon}</span>
-                              {type.name} ({type.unit})
+                              <span className="text-lg">{type.icon}</span>
+                              {type.name}
                             </div>
                           </SelectItem>
                         ))}
@@ -166,7 +167,7 @@ export default function Losses() {
                       id="amount"
                       type="number"
                       step="0.1"
-                      placeholder={`Ex: 12.5 ${lossTypes.find(t => t.id === formData.loss_type_id)?.unit || ''}`}
+                      placeholder={`Ex: 12.5 ${lossTypes.find(t => t._id === formData.loss_type_id)?.unit || 'kg'}`}
                       value={formData.amount}
                       onChange={(e) => handleInputChange("amount", e.target.value)}
                     />
@@ -225,17 +226,17 @@ export default function Losses() {
               <CardContent>
                 <div className="space-y-3">
                   {losses.map((loss) => {
-                    const lossType = lossTypes.find(t => t.id === loss.loss_type_id);
+                    const lossType = lossTypes.find(t => t._id === loss.loss_type_id);
                     const machine = machines.find(m => m.id === loss.machine_id);
                     const order = orders.find(o => o.id === loss.order_id);
                     
                     return (
-                      <div key={loss.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
+                      <div key={loss._id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 ${lossType?.color || 'bg-gray-500'} rounded-full flex items-center justify-center text-white text-sm`}>
-                              {lossType?.icon || '?'}
-                            </div>
+                          <div className={`w-8 h-8 ${lossType?.color || 'bg-gray-500'} rounded-full flex items-center justify-center text-white text-sm`}>
+                            <span className="text-base">{lossType?.icon || '?'}</span>
+                          </div>
                             <div>
                               <h4 className="font-medium">{machine?.name || 'Máquina não identificada'}</h4>
                               <p className="text-sm text-muted-foreground">
@@ -245,7 +246,7 @@ export default function Losses() {
                           </div>
                           <div className="text-right">
                             <p className="text-lg font-bold text-losses">
-                              {loss.amount} {lossType?.unit || 'kg'}
+                              {loss.quantity} {loss.unit || 'kg'}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {new Date(loss.recorded_at).toLocaleTimeString('pt-BR', { 
@@ -257,7 +258,7 @@ export default function Losses() {
                         </div>
                         
                         <div className="mt-3 pt-3 border-t">
-                          <p className="text-sm text-muted-foreground">{loss.reason}</p>
+                          <p className="text-sm text-muted-foreground">{loss.description}</p>
                           {order && (
                             <p className="text-xs text-muted-foreground mt-1">
                               Ordem: {order.code} - {order.product_name}
