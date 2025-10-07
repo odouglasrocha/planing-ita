@@ -1,0 +1,19 @@
+project_id = "flsklduipeqdzviwnlfz"
+
+[functions.calculate-oee]
+verify_jwt = false
+
+[functions.generate-report]
+verify_jwt = false
+
+[functions.ai-recommendations]
+verify_jwt = false
+
+[functions.analytics]
+verify_jwt = false
+
+[functions.mongodb-machines]
+verify_jwt = false
+
+[functions.mongodb-seed-users]
+verify_jwt = false

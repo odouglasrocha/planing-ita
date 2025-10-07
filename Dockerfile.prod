@@ -1,0 +1,56 @@
+# Multi-stage build para otimizar o tamanho da imagem
+FROM node:18-alpine AS builder
+
+# Definir diretório de trabalho
+WORKDIR /app
+
+# Copiar arquivos de dependências
+COPY package*.json ./
+COPY bun.lockb ./
+
+# Instalar dependências
+RUN npm ci --only=production && npm cache clean --force
+
+# Copiar código fonte
+COPY . .
+
+# Build da aplicação
+RUN npm run build:prod
+
+# Estágio de produção
+FROM node:18-alpine AS production
+
+# Instalar curl para health checks
+RUN apk add --no-cache curl
+
+# Criar usuário não-root
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodejs -u 1001
+
+# Definir diretório de trabalho
+WORKDIR /app
+
+# Copiar dependências de produção
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+
+# Copiar arquivos necessários
+COPY --from=builder /app/server.js ./
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/.env.production ./.env
+
+# Criar diretório de logs
+RUN mkdir -p logs && chown -R nodejs:nodejs logs
+
+# Mudar para usuário não-root
+USER nodejs
+
+# Expor porta
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3001/health || exit 1
+
+# Comando para iniciar a aplicação
+CMD ["npm", "run", "server:prod"]
