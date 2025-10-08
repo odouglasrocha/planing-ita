@@ -9,17 +9,24 @@ import {
   BarChart3, 
   TrendingUp,
   AlertTriangle,
-  Factory
+  Factory,
+  Plus,
+  FileText,
+  ClipboardList
 } from "lucide-react";
 import { useMachines } from "@/hooks/useMachines";
 import { useProductionOrders } from "@/hooks/useProductionOrders";
 import { useProductionRecords } from "@/hooks/useProductionRecords";
+import { useMaterialLosses } from "@/hooks/useMaterialLosses";
 import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Index() {
+  const navigate = useNavigate();
   const { machines, loading: machinesLoading } = useMachines();
   const { orders } = useProductionOrders();
   const { records, getTotalProduced } = useProductionRecords();
+  const { losses, lossTypes, loading: lossesLoading, getTotalLosses, getLossTypeTotal } = useMaterialLosses();
 
   // Calculate OEE data based on real data
   const oeeData = useMemo(() => {
@@ -51,6 +58,24 @@ export default function Index() {
     };
   }, [machines, orders, records, getTotalProduced]);
 
+  // Calculate real-time loss data from MongoDB
+  const lossData = useMemo(() => {
+    if (lossesLoading || !lossTypes.length) {
+      return [
+        { type: "Filme", amount: 0, color: "bg-red-500" },
+        { type: "Orgânico", amount: 0, color: "bg-orange-500" },
+        { type: "Setup", amount: 0, color: "bg-yellow-500" },
+        { type: "Outros", amount: 0, color: "bg-purple-500" }
+      ];
+    }
+
+    return lossTypes.map(lossType => ({
+      type: lossType.name,
+      amount: getLossTypeTotal(lossType._id),
+      color: lossType.color || "bg-gray-500"
+    })).filter(loss => loss.amount > 0);
+  }, [lossTypes, lossesLoading, getLossTypeTotal]);
+
   const enrichedMachines = useMemo(() => {
     return machines.map(machine => {
       const currentOrder = orders.find(order => 
@@ -76,20 +101,13 @@ export default function Index() {
     });
   }, [machines, orders, getTotalProduced]);
 
-  const lossData = [
-    { type: "Filme", amount: 120, color: "bg-red-500" },
-    { type: "Orgânico", amount: 85, color: "bg-orange-500" },
-    { type: "Setup", amount: 45, color: "bg-yellow-500" },
-    { type: "Outros", amount: 23, color: "bg-purple-500" }
-  ];
-
   return (
     <MainLayout>
       <div className="space-y-6">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dashboard OEE</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dashboard</h1>
             <p className="text-sm sm:text-base text-muted-foreground">
               Visão geral da eficiência em tempo real
             </p>
@@ -173,23 +191,33 @@ export default function Index() {
                 <CardTitle className="text-lg">Breakdown por Tipo</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {lossData.map((loss, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full ${loss.color}`} />
-                      <span className="font-medium">{loss.type}</span>
-                    </div>
-                    <span className="text-sm text-muted-foreground">
-                      {loss.amount} kg
-                    </span>
+                {lossesLoading ? (
+                  <div className="text-center py-4 text-muted-foreground">
+                    Carregando perdas...
                   </div>
-                ))}
+                ) : lossData.length > 0 ? (
+                  lossData.map((loss, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-3 h-3 rounded-full ${loss.color}`} />
+                        <span className="font-medium">{loss.type}</span>
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        {loss.amount.toFixed(1)} kg
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4 text-muted-foreground">
+                    Nenhuma perda registrada hoje
+                  </div>
+                )}
                 
                 <div className="pt-3 border-t">
                   <div className="flex items-center justify-between font-semibold">
                     <span>Total</span>
                     <span className="text-losses">
-                      {lossData.reduce((sum, loss) => sum + loss.amount, 0)} kg
+                      {lossesLoading ? '0.0' : getTotalLosses().toFixed(1)} kg
                     </span>
                   </div>
                 </div>
@@ -202,22 +230,40 @@ export default function Index() {
                 <CardTitle className="text-lg">Ações Rápidas</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <button className="w-full p-3 text-left rounded-lg border hover:bg-muted/50 transition-colors">
-                  <div className="font-medium">Registrar Perda</div>
-                  <div className="text-sm text-muted-foreground">
-                    Filme ou material orgânico
+                <button 
+                  onClick={() => navigate('/losses')}
+                  className="w-full p-3 text-left rounded-lg border hover:bg-muted/50 transition-colors flex items-center gap-3"
+                >
+                  <Plus className="h-4 w-4 text-losses" />
+                  <div>
+                    <div className="font-medium">Registrar Perda</div>
+                    <div className="text-sm text-muted-foreground">
+                      Filme ou material orgânico
+                    </div>
                   </div>
                 </button>
-                <button className="w-full p-3 text-left rounded-lg border hover:bg-muted/50 transition-colors">
-                  <div className="font-medium">Apontar Produção</div>
-                  <div className="text-sm text-muted-foreground">
-                    Iniciar/finalizar ordem
+                <button 
+                  onClick={() => navigate('/production')}
+                  className="w-full p-3 text-left rounded-lg border hover:bg-muted/50 transition-colors flex items-center gap-3"
+                >
+                  <ClipboardList className="h-4 w-4 text-primary" />
+                  <div>
+                    <div className="font-medium">Apontar Produção</div>
+                    <div className="text-sm text-muted-foreground">
+                      Iniciar/finalizar ordem
+                    </div>
                   </div>
                 </button>
-                <button className="w-full p-3 text-left rounded-lg border hover:bg-muted/50 transition-colors">
-                  <div className="font-medium">Relatório Turno</div>
-                  <div className="text-sm text-muted-foreground">
-                    Gerar resumo atual
+                <button 
+                  onClick={() => navigate('/analytics')}
+                  className="w-full p-3 text-left rounded-lg border hover:bg-muted/50 transition-colors flex items-center gap-3"
+                >
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <div className="font-medium">Relatório Turno</div>
+                    <div className="text-sm text-muted-foreground">
+                      Gerar resumo atual
+                    </div>
                   </div>
                 </button>
               </CardContent>

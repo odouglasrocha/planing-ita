@@ -21,7 +21,8 @@ import {
   Shield,
   Eye,
   Cog,
-  Brain
+  Brain,
+  LineChart
 } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
@@ -40,8 +41,8 @@ const menuItems = {
         { title: "Planejamento", url: "/planning", icon: Calendar },
         { title: "Produção", url: "/production", icon: Wrench },
         { title: "Perdas", url: "/losses", icon: TrendingDown },
+        { title: "Analytics & IA", url: "/analytics", icon: LineChart },
         { title: "Recomendações IA", url: "/recommendations", icon: Brain },
-        { title: "Relatórios", url: "/reports", icon: FileText },
       ]
     },
     {
@@ -61,8 +62,8 @@ const menuItems = {
         { title: "Planejamento", url: "/planning", icon: Calendar },
         { title: "Produção", url: "/production", icon: Wrench },
         { title: "Perdas", url: "/losses", icon: TrendingDown },
+        { title: "Analytics & IA", url: "/analytics", icon: LineChart },
         { title: "Recomendações IA", url: "/recommendations", icon: Brain },
-        { title: "Relatórios", url: "/reports", icon: FileText },
       ]
     }
   ],
@@ -74,6 +75,7 @@ const menuItems = {
         { title: "Máquinas", url: "/machines", icon: Factory },
         { title: "Produção", url: "/production", icon: Wrench },
         { title: "Perdas", url: "/losses", icon: TrendingDown },
+        { title: "Analytics & IA", url: "/analytics", icon: LineChart },
         { title: "Recomendações IA", url: "/recommendations", icon: Brain },
       ]
     }
@@ -109,9 +111,12 @@ export function AppSidebar({ userRole = 'operador' }: AppSidebarProps) {
       <SidebarContent>
         <div className="p-4 border-b">
           <div className="flex items-center gap-2">
-            <Factory className="h-6 w-6 text-primary" />
+            <img 
+              src="/src/assets/motor-plus-logo.png" 
+              alt="Motor+ Logo" 
+              className="h-8 w-auto"
+            />
             <div>
-              <h2 className="font-semibold text-sm">Sistema OEE</h2>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <RoleIcon className="h-3 w-3" />
                 <span>{getRoleLabel(userRole)}</span>

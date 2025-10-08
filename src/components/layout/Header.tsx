@@ -43,7 +43,11 @@ export function Header() {
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <SidebarTrigger className="md:hidden" />
-          <h1 className="text-xl font-semibold">Sistema OEE</h1>
+          <img 
+            src="/src/assets/motor-plus-logo.png" 
+            alt="Motor+ Logo" 
+            className="h-8 w-auto"
+          />
         </div>
         
         <div className="flex items-center gap-4">

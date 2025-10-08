@@ -12,10 +12,11 @@ import Machines from "./pages/Machines";
 import Planning from "./pages/Planning";
 import Production from "./pages/Production";
 import Losses from "./pages/Losses";
-import Reports from "./pages/Reports";
+
 import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import Recommendations from "./pages/Recommendations";
+import Analytics from "./pages/Analytics";
 
 const queryClient = new QueryClient();
 
@@ -53,11 +54,7 @@ const App = () => (
               <Losses />
             </ProtectedRoute>
           } />
-          <Route path="/reports" element={
-            <ProtectedRoute requiredRole={['admin', 'supervisor']}>
-              <Reports />
-            </ProtectedRoute>
-          } />
+
           <Route path="/users" element={
             <ProtectedRoute requiredRole="admin">
               <Users />
@@ -71,6 +68,11 @@ const App = () => (
           <Route path="/recommendations" element={
             <ProtectedRoute>
               <Recommendations />
+            </ProtectedRoute>
+          } />
+          <Route path="/analytics" element={
+            <ProtectedRoute>
+              <Analytics />
             </ProtectedRoute>
           } />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

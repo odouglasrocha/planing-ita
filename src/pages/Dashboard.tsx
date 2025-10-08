@@ -88,7 +88,7 @@ export default function Dashboard() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dashboard OEE</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dashboard</h1>
           <p className="text-sm sm:text-base text-muted-foreground">
             Visão geral da eficiência em tempo real
           </p>

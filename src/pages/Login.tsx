@@ -44,9 +44,12 @@ export default function Login() {
         {/* Login Form */}
         <Card className="w-full">
           <CardHeader className="text-center space-y-4">
-            <div className="flex items-center justify-center gap-2">
-              <Factory className="h-6 sm:h-8 w-6 sm:w-8 text-primary" />
-              <h1 className="text-xl sm:text-2xl font-bold text-primary">Sistema OEE</h1>
+            <div className="flex items-center justify-center">
+              <img 
+                src="/src/assets/motor-plus-logo.png" 
+                alt="Motor+ Logo" 
+                className="h-12 sm:h-16 w-auto"
+              />
             </div>
             <CardTitle className="text-lg sm:text-xl">Acesso ao Sistema</CardTitle>
             <p className="text-sm text-muted-foreground">
